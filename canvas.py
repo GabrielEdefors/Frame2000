@@ -1,11 +1,13 @@
 import tkinter as tk
 import numpy as np
+from element import Element
 
 
 class Canvas(tk.Frame):
 
     def __init__(self, parent):
         tk.Frame.__init__(self, parent)
+        self.parent = parent
 
         # Create the canvas object
         self.scrollregion_dimension = 10000
@@ -73,33 +75,53 @@ class Canvas(tk.Frame):
         # Save the coordinates
         self.coord_nodes = np.append(self.coord_nodes, [[x, y]], axis=0)
 
+        # When second node is drawn call the element class to create an element
+        if self.monitor_mouseclick_flag == 1:
+
+            # Append instance to the list
+            self.parent.element_list.append(Element(self.coord_nodes))
+
         # Draw a line between each other node
-        x1 = self.coord_nodes[self.monitor_mouseclick_flag-1, 0]
-        y1 = self.coord_nodes[self.monitor_mouseclick_flag-1, 1]
-        x2 = self.coord_nodes[self.monitor_mouseclick_flag, 0]
-        y2 = self.coord_nodes[self.monitor_mouseclick_flag, 1]
-        self.canvas.create_line(x1, y1, x2, y2, width=2.5, activefill="red")
+        # x1 = self.coord_nodes[self.monitor_mouseclick_flag-1, 0]
+        # y1 = self.coord_nodes[self.monitor_mouseclick_flag-1, 1]
+        # x2 = self.coord_nodes[self.monitor_mouseclick_flag, 0]
+        # y2 = self.coord_nodes[self.monitor_mouseclick_flag, 1]
+        # self.canvas.create_line(x1, y1, x2, y2, width=2.5, activefill="red")
 
         # Save
 
         # Update flag
         self.monitor_mouseclick_flag += 1
 
+        # Two clicks yields a new element, reset flag and coordinates
+        if self.monitor_mouseclick_flag > 1:
+            self.monitor_mouseclick_flag = 0
+            self.coord_nodes = np.empty((0, 2), float)
+
     def zoomer(self,event):
 
         if event.delta > 0:
-            self.canvas.scale("all", 0, 0, 1.1, 1.1)
+            zoomin_coefficient = 1.1
+            self.canvas.scale("all", 0, 0, zoomin_coefficient, zoomin_coefficient)
 
             # Track scaling
             self.scale *= 1.1
+
+            # Scale the last coordinate for correct line drawing
+            self.coord_nodes[-1, :] *= zoomin_coefficient
+
         elif event.delta < 0:
-            self.canvas.scale("all", 0, 0, 0.9, 0.9)
+            zoomout_coefficient = 0.9
+            self.canvas.scale("all", 0, 0, zoomout_coefficient, zoomout_coefficient)
 
             # Track scaling
             self.scale *= 0.9
+
+            # Scale the last coordinate for correct line drawing
+            self.coord_nodes[-1, :] *= zoomout_coefficient
         self.canvas.configure(scrollregion = self.canvas.bbox("all"))
 
-        self.coord_nodes[-1, :] *= self.scale
+
 
 
 

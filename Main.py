@@ -14,6 +14,9 @@ class CreateGUI(tk.Tk):
         self.iconbitmap('icon_beam_2000.ico')
         self.resizable(False,False)
 
+        # Create a list for storing instances of the element class
+        self.element_list = []
+
         # Create instances of window content
         self.menubar = Menubar(self)
         self.canvas = Canvas(self)
