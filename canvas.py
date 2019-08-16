@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.messagebox
 import numpy as np
 from element import Element
 
@@ -30,9 +31,20 @@ class Canvas(tk.Frame):
         # Monitor mouse click for node positions
         self.coord_nodes = np.empty((0, 2), float)
 
-        # Set iteration flag and call monitor_mouseclick
+        # Set an iteration flag for keeping track of first or second node of elements
         self.monitor_mouseclick_flag = 0
+
+        # And a flag for keeping track of element number
+        self.element_flag = 0
+
+        # Bind the monitor mouseclick method to the left mouse button
         self.canvas.bind("<ButtonPress-1>", self.monitor_mouseclick)
+
+        # Create a list for storing line tags
+        self.line_ids = []
+
+        # Define the size of the nodes drawn
+        self.node_rad = self.scrollregion_dimension / 1000 * self.scale
 
     def scrollbars(self):
         hbar = tk.Scrollbar(self, orient="horizontal")
@@ -69,8 +81,8 @@ class Canvas(tk.Frame):
         y = self.gridsize_h * self.scale * round(y_canvas / (self.gridsize_h * self.scale))
 
         # Draw a node when a click occurs
-        rad = self.scrollregion_dimension / 1000 * self.scale
-        self.canvas.create_oval(x-rad, y-rad, x+rad, y+rad, fill="red")
+        self.canvas.create_oval(x-self.node_rad, y-self.node_rad, x+self.node_rad,
+                                          y+self.node_rad, fill="red", tag="temp_node")
 
         # Save the coordinates
         self.coord_nodes = np.append(self.coord_nodes, [[x, y]], axis=0)
@@ -79,18 +91,24 @@ class Canvas(tk.Frame):
         if self.monitor_mouseclick_flag == 1:
 
             # Append instance to the list
-            self.parent.element_list.append(Element(self.coord_nodes))
+            self.parent.element_list.append(Element(self.coord_nodes, self.element_flag))
 
-        # Draw a line between each other node
-        # x1 = self.coord_nodes[self.monitor_mouseclick_flag-1, 0]
-        # y1 = self.coord_nodes[self.monitor_mouseclick_flag-1, 1]
-        # x2 = self.coord_nodes[self.monitor_mouseclick_flag, 0]
-        # y2 = self.coord_nodes[self.monitor_mouseclick_flag, 1]
-        # self.canvas.create_line(x1, y1, x2, y2, width=2.5, activefill="red")
+            # Delete the two previous nodes
+            self.canvas.delete('temp_node')
 
-        # Save
+            # Use the draw element method to draw a line and two nodes representing the current element
+            line, node1, node2 = self.parent.element_list[-1].draw_element(self.canvas, self.node_rad)
 
-        # Update flag
+            # bind the current element to the right click method
+            self.canvas.tag_bind(line, '<ButtonPress-3>', self.right_click)
+            self.canvas.tag_bind(node1, '<ButtonPress-3>', self.right_click)
+            self.canvas.tag_bind(node2, '<ButtonPress-3>', self.right_click)
+
+
+            # Update the element flag
+            self.element_flag += 1
+
+        # Update mouse click flag
         self.monitor_mouseclick_flag += 1
 
         # Two clicks yields a new element, reset flag and coordinates
@@ -119,7 +137,35 @@ class Canvas(tk.Frame):
 
             # Scale the last coordinate for correct line drawing
             self.coord_nodes[-1, :] *= zoomout_coefficient
-        self.canvas.configure(scrollregion = self.canvas.bbox("all"))
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def right_click(self, event):
+
+        # Get the absolute coordinates
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+
+        # Find the item closest to the click
+        item = self.canvas.find_closest(x, y)[0]
+
+        # And the element that belongs to
+        element_id = int(self.canvas.gettags(item)[0])
+
+        # Call the method delete_element_prompt
+        left_click_button = tk.Button(self.canvas, text='Exit Application', command=self.delete_element_prompt)
+        self.delete_element_prompt(element_id)
+
+        # Remove the instance from the instance list
+
+    def delete_element_prompt(self, element_id):
+        message_box = tk.messagebox.askquestion("Delete element", "Are You Sure?", icon='warning')
+
+        if message_box == 'yes':
+            # Call the elements method delete widgets
+            self.parent.element_list[element_id].erase_element(self.canvas)
+        else:
+            tk.messagebox.showinfo('Return', 'Thought so')
+
 
 
 
