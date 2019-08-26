@@ -1,6 +1,8 @@
 import tkinter as tk
 import tkinter.messagebox
+from PIL import Image, ImageTk
 import numpy as np
+
 from element import Element
 
 
@@ -13,7 +15,8 @@ class Canvas(tk.Frame):
         # Create the canvas object
         self.scrollregion_dimension = 10000
         self.canvas = tk.Canvas(self, bg='#FFFFFF',
-                                scrollregion=(-self.scrollregion_dimension, -self.scrollregion_dimension / 2, self.scrollregion_dimension, self.scrollregion_dimension / 2))
+                                scrollregion=(-self.scrollregion_dimension, -self.scrollregion_dimension / 2,
+                                self.scrollregion_dimension, self.scrollregion_dimension / 2))
 
         # Create scrollbars for canvas
         self.scrollbars()
@@ -23,13 +26,31 @@ class Canvas(tk.Frame):
         self.scale = 1
         self.canvas.bind("<MouseWheel>", self.zoomer)
 
-        # Create grid
-        self.gridsize_w = 50
-        self.gridsize_h = 50
+        # Number of pixels per grid line
+        self.grid_scalefactor = 50
+        self.gridsize_w = self.grid_scalefactor
+        self.gridsize_h = self.grid_scalefactor
+
+        # Number of meters per grid line
+        self.nmeters_gridline = 0.5
+
+        # Call the method create_grid to draw the grid
         self.create_grid()
 
+        # Create scalebar
+        self.scalebar_l1_init = 1
+        self.scalebar_l2_init = 5
+
+        # Before zooming we have the initial scale bar lengths
+        self.scalebar_l1 = self.scalebar_l1_init * round(self.scale, 2)
+        self.scalebar_l2 = self.scalebar_l2_init * round(self.scale, 2)
+
+        # Call the method create_scalebar to create the scalebar
+        self.create_scalebar()
+
         # Monitor mouse click for node positions
-        self.coord_nodes = np.empty((0, 2), float)
+        self.coord_nodes_canvas = np.empty((0, 2), float)
+        self.coord_nodes_absolute = np.empty((0, 2), float)
 
         # Set an iteration flag for keeping track of first or second node of elements
         self.monitor_mouseclick_flag = 0
@@ -44,25 +65,34 @@ class Canvas(tk.Frame):
         self.line_ids = []
 
         # Define the size of the nodes drawn
-        self.node_rad = self.scrollregion_dimension / 1000 * self.scale
+        self.node_rad_init = self.scrollregion_dimension / 1000
+
+        # Before zooming same as the initial radius
+        self.node_rad = self.node_rad_init
 
     def scrollbars(self):
+
+        # Create a horizontal scrollbar and pack it in the bottom of the frame
         hbar = tk.Scrollbar(self, orient="horizontal")
         hbar.pack(side="bottom", fill="x")
         hbar.config(command=self.canvas.xview)
+
+        # Create a horizontal scrollbar and pack it in the bottom of the frame
         vbar = tk.Scrollbar(self, orient="vertical")
         vbar.pack(side="right", fill="y")
         vbar.config(command=self.canvas.yview)
 
+        # Assign the scrollbars to the canvas
         self.canvas.config(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
 
     def create_grid(self):
 
-        a = self.canvas.bbox("all")
+        # Loop through each x-coordinate in the scroll region and draw grid lines
         for i in range(-self.scrollregion_dimension, self.scrollregion_dimension, self.gridsize_w):
             self.canvas.create_line([(i, -int(-self.scrollregion_dimension / 2)),
                                      (i, int(-self.scrollregion_dimension / 2))])
 
+        # Loop through each y-coordinate in the scroll region and draw grid lines
         for i in range(int(-self.scrollregion_dimension / 2), int(self.scrollregion_dimension / 2), self.gridsize_h):
             self.canvas.create_line([(-self.scrollregion_dimension, i), (self.scrollregion_dimension, i)])
 
@@ -72,26 +102,32 @@ class Canvas(tk.Frame):
         x_canvas = self.canvas.canvasx(event.x)
         y_canvas = self.canvas.canvasy(event.y)
 
-        # Get the absolute position
-        x = event.x
-        y = event.y
-
         # Round to grid
-        x = self.gridsize_w * self.scale * round(x_canvas / (self.gridsize_w * self.scale))
-        y = self.gridsize_h * self.scale * round(y_canvas / (self.gridsize_h * self.scale))
+        x_canvas_round = self.gridsize_w * self.scale * round(x_canvas / (self.gridsize_w * self.scale))
+        y_canvas_round = self.gridsize_h * self.scale * round(y_canvas / (self.gridsize_h * self.scale))
+
+        # Round to grid and scale coordinates for future computations
+        x_absolute_round = self.gridsize_w * round(event.x / (self.gridsize_w * self.scale))\
+                           / self.grid_scalefactor * self.nmeters_gridline
+
+        y_absolute_round = self.gridsize_h * round(event.y / (self.gridsize_h * self.scale))\
+                           / self.grid_scalefactor * self.nmeters_gridline
 
         # Draw a node when a click occurs
-        self.canvas.create_oval(x-self.node_rad, y-self.node_rad, x+self.node_rad,
-                                          y+self.node_rad, fill="red", tag="temp_node")
+        self.canvas.create_oval(x_canvas_round-self.node_rad, y_canvas_round-self.node_rad, x_canvas_round+self.node_rad,
+                                y_canvas_round+self.node_rad, fill="red", tag="temp_node")
 
         # Save the coordinates
-        self.coord_nodes = np.append(self.coord_nodes, [[x, y]], axis=0)
+        self.coord_nodes_canvas = np.append(self.coord_nodes_canvas, [[x_canvas_round, y_canvas_round]], axis=0)
+        self.coord_nodes_absolute = np.append(self.coord_nodes_absolute, [[x_absolute_round, y_absolute_round]], axis=0)
 
         # When second node is drawn call the element class to create an element
         if self.monitor_mouseclick_flag == 1:
 
             # Append instance to the list
-            self.parent.element_list.append(Element(self.coord_nodes, self.element_flag))
+            self.parent.element_list.append(Element(self.coord_nodes_canvas,
+                                                    self.coord_nodes_absolute,
+                                                    self.element_flag))
 
             # Delete the two previous nodes
             self.canvas.delete('temp_node')
@@ -99,11 +135,10 @@ class Canvas(tk.Frame):
             # Use the draw element method to draw a line and two nodes representing the current element
             line, node1, node2 = self.parent.element_list[-1].draw_element(self.canvas, self.node_rad)
 
-            # bind the current element to the right click method
-            self.canvas.tag_bind(line, '<ButtonPress-3>', self.right_click)
-            self.canvas.tag_bind(node1, '<ButtonPress-3>', self.right_click)
-            self.canvas.tag_bind(node2, '<ButtonPress-3>', self.right_click)
-
+            # bind the current elements widgets to the right click method
+            self.canvas.tag_bind(line, '<ButtonRelease-3>', self.right_click)
+            self.canvas.tag_bind(node1, '<ButtonRelease-3>', self.right_click)
+            self.canvas.tag_bind(node2, '<ButtonRelease-3>', self.right_click)
 
             # Update the element flag
             self.element_flag += 1
@@ -114,34 +149,59 @@ class Canvas(tk.Frame):
         # Two clicks yields a new element, reset flag and coordinates
         if self.monitor_mouseclick_flag > 1:
             self.monitor_mouseclick_flag = 0
-            self.coord_nodes = np.empty((0, 2), float)
+            self.coord_nodes_canvas = np.empty((0, 2), float)
+            self.coord_nodes_absolute = np.empty((0, 2), float)
 
     def zoomer(self,event):
 
+        # Zoom in if delta>0
         if event.delta > 0:
             zoomin_coefficient = 1.1
-            self.canvas.scale("all", 0, 0, zoomin_coefficient, zoomin_coefficient)
 
-            # Track scaling
-            self.scale *= 1.1
+            # Restrict the maximum zooming to 2x
+            if self.scale < 2:
+                self.canvas.scale("all", 0, 0, zoomin_coefficient, zoomin_coefficient)
 
-            # Scale the last coordinate for correct line drawing
-            self.coord_nodes[-1, :] *= zoomin_coefficient
+                # Track scaling
+                self.scale *= 1.1
 
+                # Update node radius
+                self.node_rad = self.node_rad_init * self.scale
+
+                # Update the scalebar
+                self.scalebar_l1 = self.scalebar_l1_init / round(self.scale, 2)
+                self.scalebar_l2 = self.scalebar_l2_init / round(self.scale, 2)
+
+                # Reload the scalebar
+                self.create_scalebar()
+
+        # Zoom out if delta>0
         elif event.delta < 0:
             zoomout_coefficient = 0.9
-            self.canvas.scale("all", 0, 0, zoomout_coefficient, zoomout_coefficient)
 
-            # Track scaling
-            self.scale *= 0.9
+            # Restrict the minimum zooming to 0.5x
+            if self.scale > 0.5:
+                self.canvas.scale("all", 0, 0, zoomout_coefficient, zoomout_coefficient)
 
-            # Scale the last coordinate for correct line drawing
-            self.coord_nodes[-1, :] *= zoomout_coefficient
+                # Track scaling
+                self.scale *= 0.9
+
+                # Update node radius
+                self.node_rad = self.node_rad_init * self.scale
+
+                # Update the scalebar
+                self.scalebar_l1 = self.scalebar_l1_init / round(self.scale, 2)
+                self.scalebar_l2 = self.scalebar_l2_init / round(self.scale, 2)
+
+                # Reload the scalebar
+                self.create_scalebar()
+
+        # Bind all widgets on the canvas to the zoom method
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def right_click(self, event):
 
-        # Get the absolute coordinates
+        # Get the canvas coordinates coordinates
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
 
@@ -151,20 +211,55 @@ class Canvas(tk.Frame):
         # And the element that belongs to
         element_id = int(self.canvas.gettags(item)[0])
 
-        # Call the method delete_element_prompt
-        left_click_button = tk.Button(self.canvas, text='Exit Application', command=self.delete_element_prompt)
-        self.delete_element_prompt(element_id)
+        # Call the method element_popup when with the current element as argument
+        self.element_popup(element_id, event)
+
+    def element_popup(self, element_id, event):
+
+        # create a menu
+        popup = tk.Menu(self, tearoff=0)
+        popup.add_command(label="Delete Element")
+        popup.add_command(label="Add Element Load", command=self.hello)
+        popup.add_separator()
+        popup.add_command(label="Back")
+
+        popup.entryconfig("Delete element", command=lambda: self.delete_element(element_id))
+
+        # Display the popup
+        try:
+            popup.tk_popup(event.x_root, event.y_root, 0)
+        finally:
+            popup.grab_relea
+
+    def delete_element(self, element_id):
+
+        # Call the elements method delete widgets
+        self.parent.element_list[element_id].erase_element(self.canvas)
 
         # Remove the instance from the instance list
+        del self.parent.element_list[element_id]
 
-    def delete_element_prompt(self, element_id):
-        message_box = tk.messagebox.askquestion("Delete element", "Are You Sure?", icon='warning')
+    def create_scalebar(self):
 
-        if message_box == 'yes':
-            # Call the elements method delete widgets
-            self.parent.element_list[element_id].erase_element(self.canvas)
-        else:
-            tk.messagebox.showinfo('Return', 'Thought so')
+        # Create two text strings with 2 decimal places
+        str1 = str("{:.1f}".format(self.scalebar_l1)).format("%.2f") + "m"
+        str2 = str("{:.1f}".format(self.scalebar_l2)).format("%.2f") + "m" + "\n"
+
+        # Join text 1 and 2 with adequate space to fit the image
+        scalebar_string = (" " * 20).join([" ", str1])
+        scalebar_string = (" " * 123).join([scalebar_string, str2])
+
+        # Load image
+        scalebar_image = tkinter.PhotoImage(file='scalebar.png')
+
+        # Create a label with the frame self as parent
+        label_scalebar = tk.Label(self, image=scalebar_image, text=scalebar_string, compound=tkinter.CENTER,
+                                  anchor='w', justify="left")
+
+        # Place it in the lower left corner
+        label_scalebar.place(relx=0.03, rely=0.965, anchor="sw")
+        label_scalebar.image = scalebar_image
+
 
 
 
