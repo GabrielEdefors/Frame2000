@@ -65,7 +65,7 @@ class Canvas(tk.Frame):
         self.line_ids = []
 
         # Define the size of the nodes drawn
-        self.node_rad_init = self.scrollregion_dimension / 1000
+        self.node_rad_init = self.scrollregion_dimension / 1500
 
         # Before zooming same as the initial radius
         self.node_rad = self.node_rad_init
@@ -133,12 +133,7 @@ class Canvas(tk.Frame):
             self.canvas.delete('temp_node')
 
             # Use the draw element method to draw a line and two nodes representing the current element
-            line, node1, node2 = self.parent.element_list[-1].draw_element(self.canvas, self.node_rad)
-
-            # bind the current elements widgets to the right click method
-            self.canvas.tag_bind(line, '<ButtonRelease-3>', self.right_click)
-            self.canvas.tag_bind(node1, '<ButtonRelease-3>', self.right_click)
-            self.canvas.tag_bind(node2, '<ButtonRelease-3>', self.right_click)
+            self.parent.element_list[-1].draw_element(self)
 
             # Update the element flag
             self.element_flag += 1
@@ -156,14 +151,16 @@ class Canvas(tk.Frame):
 
         # Zoom in if delta>0
         if event.delta > 0:
-            zoomin_coefficient = 1.1
+
+            # Calculate the zoom in coefficient such that the scale is a multiple of the initial scale
+            zoomin_coefficient = 2
 
             # Restrict the maximum zooming to 2x
-            if self.scale < 2:
+            if self.scale < 4:
                 self.canvas.scale("all", 0, 0, zoomin_coefficient, zoomin_coefficient)
 
                 # Track scaling
-                self.scale *= 1.1
+                self.scale *= zoomin_coefficient
 
                 # Update node radius
                 self.node_rad = self.node_rad_init * self.scale
@@ -177,14 +174,14 @@ class Canvas(tk.Frame):
 
         # Zoom out if delta>0
         elif event.delta < 0:
-            zoomout_coefficient = 0.9
+            zoomout_coefficient = 0.5
 
             # Restrict the minimum zooming to 0.5x
-            if self.scale > 0.5:
+            if self.scale > 0.25:
                 self.canvas.scale("all", 0, 0, zoomout_coefficient, zoomout_coefficient)
 
                 # Track scaling
-                self.scale *= 0.9
+                self.scale *= zoomout_coefficient
 
                 # Update node radius
                 self.node_rad = self.node_rad_init * self.scale
@@ -219,25 +216,40 @@ class Canvas(tk.Frame):
         # create a menu
         popup = tk.Menu(self, tearoff=0)
         popup.add_command(label="Delete Element")
-        popup.add_command(label="Add Element Load", command=self.hello)
+        popup.add_command(label="Add Element Load")
         popup.add_separator()
         popup.add_command(label="Back")
 
-        popup.entryconfig("Delete element", command=lambda: self.delete_element(element_id))
+        # Add a command for the delete element button
+        popup.entryconfig("Delete Element", command=lambda: self.delete_element(element_id))
+
+        # Add a command for the add element load
+        popup.entryconfig("Add Element Load", command=lambda: self.parent.element_list[element_id].add_load(self))
 
         # Display the popup
         try:
             popup.tk_popup(event.x_root, event.y_root, 0)
         finally:
-            popup.grab_relea
+            popup.grab_release()
 
     def delete_element(self, element_id):
 
-        # Call the elements method delete widgets
+        # Call the elements method erase_element to delete widgets
         self.parent.element_list[element_id].erase_element(self.canvas)
 
         # Remove the instance from the instance list
         del self.parent.element_list[element_id]
+
+        # Move all element_ids down one step for element numbers above the one deleted
+        for index, element in enumerate(self.parent.element_list):
+            if index >= element_id:
+                element.element_id -= 1
+
+                # Change the tags associated with the element
+                element.change_tags(self)
+
+        # Subtract 1 from the element flag
+        self.element_flag -= 1
 
     def create_scalebar(self):
 
@@ -259,7 +271,6 @@ class Canvas(tk.Frame):
         # Place it in the lower left corner
         label_scalebar.place(relx=0.03, rely=0.965, anchor="sw")
         label_scalebar.image = scalebar_image
-
 
 
 
