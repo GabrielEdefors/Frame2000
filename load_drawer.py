@@ -4,14 +4,17 @@ import tkinter as tk
 
 from geometry_calculations import coordinates_parallel_line
 
+
 def transversal_load(x1, y1, x2, y2, magnitude, direction, length, canvas_load):
 
-    # The offset is proportional to the magnitude of the load
-    k = 1
-    offset = magnitude * k
+    # Scale the offset to fit the window
+    if magnitude / 2 > 1:
+        offset = magnitude / 2
+    else:
+        offset = 1
 
     # Distance between load arrows
-    dist_arrow = 1
+    dist_arrow = 0.5
 
     # Calculate the end coordinates for a parallel line with the offset deterimined by the magnitude of the load
     x1_loadline, y1_loadline, x2_loadline, y2_loadline, dummy, dummy = coordinates_parallel_line(x1, y1, x2, y2, length, offset, length)
@@ -27,8 +30,13 @@ def transversal_load(x1, y1, x2, y2, magnitude, direction, length, canvas_load):
     y_end_arrows = np.linspace(y1, y2, n_arrows)
 
     # Draw an arrow between each coordinate pair of the arrays created
-    for i in range(0,n_arrows):
-        canvas_load.create_line(x_start_arrows[i], y_start_arrows[i], x_end_arrows[i], y_end_arrows[i], arrow=tk.LAST)
+    if direction == 'Negative':
+        for i in range(0, n_arrows):
+            canvas_load.create_line(x_start_arrows[i], y_start_arrows[i], x_end_arrows[i], y_end_arrows[i], arrow=tk.LAST)
+
+    else:
+        for i in range(0, n_arrows):
+            canvas_load.create_line(x_end_arrows[i], y_end_arrows[i], x_start_arrows[i], y_start_arrows[i], arrow=tk.LAST)
 
 
 

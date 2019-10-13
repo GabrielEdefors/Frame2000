@@ -17,6 +17,10 @@ class LoadWindow(tk.Tk):
         self.iconbitmap('icon_beam_2000.ico')
         self.resizable(False,False)
 
+        # Define parents
+        self.element_parent = element_parent
+        self.canvas_parent = canvas_parent
+
         # Set the dimensions
         self.width = 700
         self.height = 400
@@ -32,8 +36,8 @@ class LoadWindow(tk.Tk):
 
         # Create a label frame for each load case
         self.labelframe_transverse()
-        self.labelframe_axial()
-        self.labelframe_nodal()
+        # self.labelframe_axial()
+        # self.labelframe_nodal()
 
         # Define the canvas size which the element will be drawn onto
         self.width_canvas = self.width * 2 / 3
@@ -43,27 +47,37 @@ class LoadWindow(tk.Tk):
         self.canvas_illustration = tk.Canvas(self.canvas_load, width=self.width_canvas, height=self.height_canvas)
         self.canvas_illustration.pack(expand=True, fill="both")
 
-        # Create an illustration of the loading scenario
-        self.add_illustration(element_parent, canvas_parent)
-
     def labelframe_transverse(self):
 
         # Add a label frame
-        frame_transverse = tk.LabelFrame(self.left_frame, text="Transverse Line Load")
-        frame_transverse.place(x=0, y=0, anchor="nw", width=self.width / 3, height=self.height / 3)
+        labelframe_transverse = tk.LabelFrame(self.left_frame, text="Transverse Line Load")
+        labelframe_transverse.place(x=0, y=0, anchor="nw", width=self.width / 3, height=self.height / 3)
+
+        # And a frame inside the label frame
+        frame_transverse = tk.Frame(labelframe_transverse)
+        frame_transverse.pack(fill="both", expand="yes", pady=10, padx=5)
+
+        # Add a label for magnitude entry
+        label_transverse_mag = tk.Label(frame_transverse, text="Magnitude [N/m]")
+        label_transverse_mag.grid(row=0, column=0, sticky="W")
+
+        self.entry_transverse_mag = tk.Entry(frame_transverse)
+        self.entry_transverse_mag.grid(row=0, column=1, sticky="E", padx=5)
 
         # Add a menu for choosing load direction
         menu_transverse_options = ['Positive', 'Negative']
 
-        initial_value_transverse = tk.StringVar(frame_transverse)
-        initial_value_transverse.set(menu_transverse_options[0])
+        initial_value_transverse_dir = tk.StringVar(frame_transverse)
+        initial_value_transverse_dir.set(menu_transverse_options[0])
 
-        popupMenu = tk.OptionMenu(frame_transverse, initial_value_transverse, *menu_transverse_options)
-        popupMenu.grid(row=0, column=1)
+        popupMenu = tk.OptionMenu(frame_transverse, initial_value_transverse_dir, *menu_transverse_options,
+                                  command=self.add_illustration)
+
+        popupMenu.grid(row=1, column=1, sticky="W")
 
         # Add a Label for the load direction menu
-        label_transverse = tk.Label(frame_transverse, text="Choose Load Direction")
-        label_transverse.grid(row=0, column=0)
+        label_transverse_dir = tk.Label(frame_transverse, text="Choose Load Direction")
+        label_transverse_dir.grid(row=1, column=0, sticky="E", padx=5)
 
     def labelframe_axial(self):
 
@@ -102,12 +116,15 @@ class LoadWindow(tk.Tk):
         label_nodal = tk.Label(frame_nodal, text="Choose Load Direction")
         label_nodal.grid(row=0, column=0)
 
-    def add_illustration(self, element_parent, canvas_parent):
+    def add_illustration(self, direction):
 
-        x1 = element_parent.coords_canvas[0, 0]
-        y1 = element_parent.coords_canvas[0, 1]
-        x2 = element_parent.coords_canvas[1, 0]
-        y2 = element_parent.coords_canvas[1, 1]
+        # Clear canvas
+        self.canvas_illustration.delete("all")
+
+        x1 = self.element_parent.coords_canvas[0, 0]
+        y1 = self.element_parent.coords_canvas[0, 1]
+        x2 = self.element_parent.coords_canvas[1, 0]
+        y2 = self.element_parent.coords_canvas[1, 1]
 
         # Real distances between the nodes
         delta_x = abs(x2 - x1)
@@ -139,7 +156,7 @@ class LoadWindow(tk.Tk):
         y2 = self.height_canvas / 2 + delta_y_scaled / 2
 
         # Node radius
-        node_rad = canvas_parent.node_rad
+        node_rad = self.canvas_parent.node_rad
 
         line = self.canvas_illustration.create_line(x1, y1, x2, y2, width=2.5, activefill="red")
         node1 = self.canvas_illustration.create_oval(x1 - node_rad, y1 - node_rad, x1 + node_rad,
@@ -148,10 +165,10 @@ class LoadWindow(tk.Tk):
                                                 y2 + node_rad, fill="red")
 
         # Call the methods in load drawer to draw the loads
-        magnitude_transversal = -10
-        direction = "positive"
+        magnitude = float(self.entry_transverse_mag.get())
+        transversal_load(x1, y1, x2, y2, magnitude, direction, self.element_parent.length, self.canvas_illustration)
 
-        transversal_load(x1, y1, x2, y2, magnitude_transversal, direction, element_parent.length, self.canvas_illustration)
+
 
 
 
